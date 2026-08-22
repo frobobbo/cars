@@ -1,0 +1,175 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex,nofollow,noarchive">
+  <title>Vehicle Watch</title>
+  <link rel="stylesheet" href="/static/app.css">
+</head>
+<body>
+  <main class="shell">
+    <header class="topbar">
+      <a class="brand" href="/" aria-label="Vehicle Watch home">
+        <span class="brand-mark">V</span>
+        <span><strong>Vehicle Watch</strong><small>Private search workspace</small></span>
+      </a>
+      <form action="/logout" method="post">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        <button class="quiet-button" type="submit">Sign out</button>
+      </form>
+    </header>
+
+    <section class="hero">
+      <div>
+        <p class="eyebrow"><span class="live-dot"></span> Daily Enclave + Traverse search</p>
+        <h1>Every credible vehicle.<br><span>Your decision notes.</span></h1>
+        <p class="hero-copy">Verified daily matches and saved Marketplace comparisons in one private dashboard. Search imports refresh listing evidence without overwriting your notes.</p>
+      </div>
+      <aside class="run-card">
+        <span class="label">Last successful search</span>
+        <strong>{{ last_run_label }}</strong>
+        {% set coverage = metadata.last_run_coverage or {} %}
+        <div class="run-grid">
+          <span><b>{{ coverage.new_exact_matches if coverage.new_exact_matches is defined else '—' }}</b> new matches</span>
+          <span><b>{{ 'Complete' if coverage.complete else 'Unknown' }}</b> coverage</span>
+        </div>
+        <small>Listing evidence can change. Open and recheck any listing before travel or payment.</small>
+      </aside>
+    </section>
+
+    <section class="metrics" aria-label="Vehicle summary">
+      <article><span>Tracked vehicles</span><strong>{{ stats.total }}</strong></article>
+      <article><span>Daily exact matches</span><strong>{{ stats.watch }}</strong></article>
+      <article><span>Saved comparisons</span><strong>{{ stats.saved }}</strong></article>
+      <article><span>Vehicles with notes</span><strong>{{ stats.notes }}</strong></article>
+      <article class="{{ 'accent-metric' if stats.interested else '' }}"><span>Interested</span><strong>{{ stats.interested }}</strong></article>
+    </section>
+
+    <section class="controls">
+      <div class="tabs" aria-label="Collection filters">
+        <a class="tab {{ 'active' if collection == 'all' else '' }}" href="/?collection=all">All</a>
+        <a class="tab {{ 'active' if collection == 'watch' else '' }}" href="/?collection=watch">Daily matches</a>
+        <a class="tab {{ 'active' if collection == 'saved' else '' }}" href="/?collection=saved">Saved vehicles</a>
+      </div>
+      <form class="search" method="get" action="/">
+        <input type="hidden" name="collection" value="{{ collection }}">
+        <label class="search-label" for="q">Search dashboard</label>
+        <input id="q" name="q" value="{{ query }}" maxlength="100" placeholder="Model, dealer, location, VIN, or your notes">
+        <select name="status" aria-label="Filter by status">
+          <option value="all" {{ 'selected' if status == 'all' else '' }}>Every status</option>
+          {% for item in statuses %}<option value="{{ item }}" {{ 'selected' if status == item else '' }}>{{ item|title }}</option>{% endfor %}
+        </select>
+        <button type="submit">Filter</button>
+      </form>
+    </section>
+
+    <section class="vehicle-list" aria-label="Tracked vehicles">
+      {% for vehicle in vehicles %}
+      <article class="vehicle-card {{ 'saved-flash' if saved_key == vehicle.vehicle_key else '' }}" id="vehicle-{{ loop.index }}">
+        <div class="vehicle-main">
+          <div class="vehicle-heading">
+            <div class="badges">
+              {% if 'watch' in vehicle.collection_set %}<span class="badge verified">Daily exact match</span>{% endif %}
+              {% if 'saved' in vehicle.collection_set %}<span class="badge saved">Saved comparison</span>{% endif %}
+              {% if vehicle.classification %}<span class="badge neutral">{{ vehicle.classification }}</span>{% endif %}
+              <span class="badge freshness {{ vehicle.freshness_class }}">{{ vehicle.freshness_label }}</span>
+            </div>
+            <h2>{{ vehicle.title }}</h2>
+            <p class="identity">{{ vehicle.source }}{% if vehicle.vin %} · VIN {{ vehicle.vin }}{% elif vehicle.listing_id %} · Listing {{ vehicle.listing_id }}{% endif %}</p>
+          </div>
+          <div class="price">{% if vehicle.price_usd is not none %}${{ "{:,}".format(vehicle.price_usd) }}{% else %}<span>Price unknown</span>{% endif %}</div>
+        </div>
+
+        <div class="facts">
+          <div><span>Mileage</span><strong>{% if vehicle.mileage is not none %}{{ "{:,}".format(vehicle.mileage) }} mi{% else %}Not stated{% endif %}</strong></div>
+          <div><span>Seller / location</span><strong>{{ vehicle.seller or vehicle.location or 'Not stated' }}</strong>{% if vehicle.seller and vehicle.location %}<small>{{ vehicle.location }}</small>{% endif %}</div>
+          <div><span>Distance</span><strong>{% if vehicle.distance_miles is not none %}{{ vehicle.distance_miles }} mi{% else %}Not recorded{% endif %}</strong></div>
+          <div><span>Last checked</span><strong>{{ vehicle.last_checked_label }}</strong></div>
+        </div>
+
+        <div class="evidence-grid">
+          <section>
+            <span class="label">AWD evidence</span>
+            <p>{{ vehicle.awd_evidence or 'Not stated in the imported evidence.' }}</p>
+          </section>
+          <section>
+            <span class="label">Title evidence</span>
+            <p>{{ vehicle.title_evidence or 'Title status was not explicitly verified.' }}</p>
+          </section>
+        </div>
+
+        {% if vehicle.blocking_gap or vehicle.risk_notes or vehicle.details.why_ranked %}
+        <details class="research-details">
+          <summary>Research notes and risks</summary>
+          {% if vehicle.details.why_ranked %}<p><strong>Assessment:</strong> {{ vehicle.details.why_ranked }}</p>{% endif %}
+          {% if vehicle.blocking_gap %}<p><strong>Criteria gap:</strong> {{ vehicle.blocking_gap }}</p>{% endif %}
+          {% if vehicle.risk_notes %}<p><strong>Risk:</strong> {{ vehicle.risk_notes }}</p>{% endif %}
+        </details>
+        {% endif %}
+
+        <div class="card-actions">
+          {% if vehicle.url %}<a class="listing-button" href="{{ vehicle.url }}" target="_blank" rel="noopener noreferrer">Open live listing <span>↗</span></a>{% endif %}
+          <span class="status-chip status-{{ vehicle.user_status }}">{{ vehicle.user_status|title }}</span>
+        </div>
+
+        <form class="note-form" action="/vehicles/{{ vehicle.vehicle_key }}/note" method="post">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+          <div class="note-head">
+            <label for="note-{{ loop.index }}">Your notes</label>
+            {% if saved_key == vehicle.vehicle_key %}<span class="saved-message">Saved</span>{% elif vehicle.note_updated_at %}<span>Updated {{ vehicle.note_updated_at }}</span>{% endif %}
+          </div>
+          <textarea id="note-{{ loop.index }}" name="note" maxlength="5000" placeholder="Inspection questions, seller response, service history, price thoughts…">{{ vehicle.note }}</textarea>
+          <div class="note-footer">
+            <label>Status
+              <select name="status">
+                {% for item in statuses %}<option value="{{ item }}" {{ 'selected' if vehicle.user_status == item else '' }}>{{ item|title }}</option>{% endfor %}
+              </select>
+            </label>
+            <button type="submit">Save note</button>
+          </div>
+        </form>
+      </article>
+      {% else %}
+      <article class="empty-state">
+        <span>⌁</span>
+        <h2>No vehicles match these filters.</h2>
+        <p>Clear the search or choose another collection/status.</p>
+        <a href="/">Reset filters</a>
+      </article>
+      {% endfor %}
+    </section>
+
+    <section class="account-panel">
+      <details>
+        <summary>Account & search criteria</summary>
+        <div class="account-grid">
+          <form action="/account/password" method="post">
+            <h3>Change password</h3>
+            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+            <label>Current password<input type="password" name="current_password" maxlength="128" autocomplete="current-password" required></label>
+            <label>New password<input type="password" name="new_password" minlength="12" maxlength="128" autocomplete="new-password" required></label>
+            <button type="submit">Update password</button>
+          </form>
+          <div>
+            <h3>Current watch</h3>
+            <ul>
+              <li>{{ (criteria.models or ['Buick Enclave', 'Chevrolet Traverse'])|join(' or ') }}</li>
+              <li>Year {{ criteria.min_year or 2018 }} or newer</li>
+              <li>Up to ${{ "{:,}".format(criteria.max_price_usd or 15000) }}</li>
+              <li>Up to {{ "{:,}".format(criteria.max_mileage or 125000) }} miles</li>
+              <li>Explicit AWD + explicit clean-title claim</li>
+              <li>Within {{ criteria.radius_miles or 60 }} miles of Auburn Hills</li>
+            </ul>
+          </div>
+        </div>
+      </details>
+    </section>
+
+    <footer>
+      <p><strong>Vehicle Watch</strong> is a research workspace, not a title, condition, pricing, or availability guarantee.</p>
+      <p>Verify the physical title, VIN, lien release, NMVTIS/CARFAX/AutoCheck history, written buyer’s order, and independent inspection before paying.</p>
+    </footer>
+  </main>
+</body>
+</html>

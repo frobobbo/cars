@@ -1,0 +1,27 @@
+replicaCount: 1
+
+image:
+  repository: ghcr.io/frobobbo/cars
+  tag: latest
+  pullPolicy: Always
+
+service:
+  type: ClusterIP
+  port: 80
+
+persistence:
+  size: 1Gi
+  storageClass: harvester-longhorn
+
+config:
+  dataDir: /data
+  allowedHosts: cars.johnsons.casa
+  secretName: cars-secrets
+
+resources:
+  requests:
+    cpu: 50m
+    memory: 96Mi
+  limits:
+    cpu: 500m
+    memory: 256Mi
