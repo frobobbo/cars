@@ -11,10 +11,9 @@ from typing import Any
 from urllib.parse import quote
 
 from fastapi import FastAPI, Form, Header, HTTPException, Request
-from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, JSONResponse, PlainTextResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
-from starlette.middleware.trustedhost import TrustedHostMiddleware
 
 from .auth import (
     create_session,
@@ -83,7 +82,6 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app = FastAPI(title="Vehicle Watch", docs_url=None, redoc_url=None, openapi_url=None)
     app.state.settings = settings
     app.state.store = store
-    app.add_middleware(TrustedHostMiddleware, allowed_hosts=list(settings.allowed_hosts))
     app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
     login_failures: dict[str, list[float]] = {}
@@ -91,7 +89,21 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     @app.middleware("http")
     async def security_headers(request: Request, call_next):
-        response = await call_next(request)
+        host = (request.url.hostname or "").lower()
+        host_allowed = any(
+            pattern == "*"
+            or host == pattern.lower()
+            or (
+                pattern.startswith("*.")
+                and host.endswith(pattern[1:].lower())
+                and host != pattern[2:].lower()
+            )
+            for pattern in settings.allowed_hosts
+        )
+        if request.url.path not in {"/health", "/ready"} and not host_allowed:
+            response = PlainTextResponse("Invalid host header", status_code=400)
+        else:
+            response = await call_next(request)
         for key, value in SECURITY_HEADERS.items():
             response.headers[key] = value
         return response

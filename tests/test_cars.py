@@ -285,3 +285,11 @@ def test_readiness_is_storage_aware(app, settings: Settings) -> None:
     failed = client.get("/ready")
     assert failed.status_code == 503
     assert failed.json() == {"detail": "Storage unavailable."}
+
+
+def test_probe_routes_bypass_host_filter_but_dashboard_does_not(app) -> None:
+    client = TestClient(app, base_url="https://untrusted.invalid")
+
+    assert client.get("/health").status_code == 200
+    assert client.get("/ready").status_code == 200
+    assert client.get("/", follow_redirects=False).status_code == 400
